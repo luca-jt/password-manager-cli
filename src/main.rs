@@ -2,9 +2,9 @@ use copypasta::{ClipboardContext, ClipboardProvider};
 use orion::aead;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::io::{BufReader, Write, stdin};
+use std::io::{Read, Write, stdin, stdout};
 
-const PASSKEY: &[u8] = b"lajgnrkeksnckvdpsymvki1ha67g0aa2"; // set that to a random value
+const PASSKEY: &[u8] = b"lajgnrkeksnckvdpsymvki1ha67g0aa2"; // set that to a random value of 32 bytes
 const FILE: &str = "passwords.json";
 
 fn encode(s: &str) -> String {
@@ -30,6 +30,7 @@ fn print_entry(entry: &Entry) {
     println!("USER NAME:\t {}", decode(entry.user_name.as_str()));
     println!("EMAIL:\t {}", decode(entry.email.as_str()));
     println!("PASSWORD:\t {}", decode(entry.password.as_str()));
+    stdout().flush().unwrap();
 }
 
 struct Manager {
@@ -39,29 +40,39 @@ struct Manager {
 
 impl Manager {
     fn new() -> Self {
-        let file = if !fs::exists(FILE).unwrap() {
+        let mut file = if !fs::exists(FILE).unwrap() {
             File::create_new(FILE).unwrap()
         } else {
             File::open(FILE).unwrap()
         };
 
-        let reader = BufReader::new(file);
+        let mut contents = String::new();
+        let num_bytes = file.read_to_string(&mut contents).unwrap();
+
+        let entries = if num_bytes == 0 {
+            Vec::new()
+        } else {
+            serde_json::from_str(&contents).unwrap()
+        };
 
         Self {
             clipboard: ClipboardContext::new().unwrap(),
-            entries: serde_json::from_reader(reader).unwrap(),
+            entries,
         }
     }
 
     fn new_entry(&mut self) {
         let mut buffer = String::new();
         print!("Enter platform: ");
+        stdout().flush().unwrap();
         stdin().read_line(&mut buffer).unwrap();
+        buffer.pop();
 
         if self.entries.iter_mut().any(|s| s.platform == buffer) {
             println!(
                 "Account information already stored for that platform. Delete it first to overwrite."
             );
+            stdout().flush().unwrap();
             return;
         }
 
@@ -73,17 +84,23 @@ impl Manager {
         buffer.clear();
 
         print!("Enter user name: ");
+        stdout().flush().unwrap();
         stdin().read_line(&mut buffer).unwrap();
+        buffer.pop();
         new_entry.user_name = encode(buffer.as_str());
         buffer.clear();
 
         print!("Enter email: ");
+        stdout().flush().unwrap();
         stdin().read_line(&mut buffer).unwrap();
+        buffer.pop();
         new_entry.user_name = encode(buffer.as_str());
         buffer.clear();
 
         print!("Enter password: ");
+        stdout().flush().unwrap();
         stdin().read_line(&mut buffer).unwrap();
+        buffer.pop();
         new_entry.user_name = encode(buffer.as_str());
         buffer.clear();
 
@@ -93,7 +110,9 @@ impl Manager {
     fn delete_entry(&mut self) {
         let mut buffer = String::new();
         print!("Enter platform: ");
+        stdout().flush().unwrap();
         stdin().read_line(&mut buffer).unwrap();
+        buffer.pop();
 
         let mut found_entry = false;
 
@@ -101,6 +120,7 @@ impl Manager {
             let keep = entry.platform == buffer;
             if !keep {
                 println!("Deleted account information:");
+                stdout().flush().unwrap();
                 print_entry(entry);
                 found_entry = true;
             }
@@ -109,24 +129,32 @@ impl Manager {
 
         if !found_entry {
             println!("No account information stored for that platform.");
+            stdout().flush().unwrap();
         }
     }
 
     fn get_entry(&mut self) {
         let mut buffer = String::new();
         print!("Enter platform: ");
+        stdout().flush().unwrap();
         stdin().read_line(&mut buffer).unwrap();
+        buffer.pop();
 
         for entry in self.entries.iter() {
             if entry.platform == buffer {
                 print_entry(entry);
+
                 self.clipboard
                     .set_contents(decode(entry.password.as_str()))
                     .unwrap();
+
                 println!("Copied password to clipboard.");
+                stdout().flush().unwrap();
+
                 return;
             }
             println!("No account information stored for that platform.");
+            stdout().flush().unwrap();
         }
     }
 
@@ -134,6 +162,7 @@ impl Manager {
         for entry in self.entries.iter() {
             print_entry(entry);
             println!("---------------------------------------------------");
+            stdout().flush().unwrap();
         }
     }
 }
@@ -151,15 +180,23 @@ fn main() {
     let mut command = String::new();
 
     loop {
-        print!("Enter a command. [new, del, get, view]: ");
+        print!("Enter a command. [new, del, get, view, close]: ");
+        stdout().flush().unwrap();
         stdin().read_line(&mut command).unwrap();
+        command.pop();
 
         match command.as_str() {
             "new" => manager.new_entry(),
             "del" => manager.delete_entry(),
             "get" => manager.get_entry(),
             "view" => manager.view_all(),
-            _ => (),
+            "close" => {
+                break;
+            }
+            _ => {
+                println!("Unknown command.");
+                stdout().flush().unwrap();
+            }
         }
 
         command.clear();
