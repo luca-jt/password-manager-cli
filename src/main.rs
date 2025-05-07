@@ -1,5 +1,5 @@
 use copypasta::{ClipboardContext, ClipboardProvider};
-use orion::aead;
+use orion::aead::{self, SecretKey};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{Read, Write, stdin, stdout};
@@ -8,19 +8,25 @@ use std::path::PathBuf;
 const PASSKEY: &[u8] = b"lajgnrkeksnckvdpsymvki1ha67g0aa2"; // set that to a random value of 32 bytes
 const FILE: &str = "passwords.json";
 
-fn full_file_path() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap();
-    path.set_file_name(FILE);
-    path
+macro_rules! flushed_print {
+    ($($arg:tt)*) => {
+        print!($($arg)*);
+        stdout().flush().unwrap();
+    };
+}
+
+fn read_input_popped(buffer: &mut String) {
+    stdin().read_line(buffer).unwrap();
+    buffer.pop();
 }
 
 fn encode(s: &str) -> Vec<u8> {
-    let secret = aead::SecretKey::from_slice(PASSKEY).unwrap();
+    let secret = SecretKey::from_slice(PASSKEY).unwrap();
     aead::seal(&secret, s.as_bytes()).unwrap()
 }
 
 fn decode(s: &[u8]) -> String {
-    let secret = aead::SecretKey::from_slice(PASSKEY).unwrap();
+    let secret = SecretKey::from_slice(PASSKEY).unwrap();
     String::from_utf8(aead::open(&secret, s).unwrap()).unwrap()
 }
 
@@ -33,14 +39,10 @@ struct Entry {
 }
 
 fn print_entry(entry: &Entry) {
-    println!("PLATFORM:\t {}", entry.platform);
-    stdout().flush().unwrap();
-    println!("USER NAME:\t {}", decode(&entry.user_name));
-    stdout().flush().unwrap();
-    println!("EMAIL:\t\t {}", decode(&entry.email));
-    stdout().flush().unwrap();
-    println!("PASSWORD:\t {}", decode(&entry.password));
-    stdout().flush().unwrap();
+    flushed_print!("PLATFORM:\t {}\n", entry.platform);
+    flushed_print!("USER NAME:\t {}\n", decode(&entry.user_name));
+    flushed_print!("EMAIL:\t\t {}\n", decode(&entry.email));
+    flushed_print!("PASSWORD:\t {}\n", decode(&entry.password));
 }
 
 struct Manager {
@@ -51,7 +53,8 @@ struct Manager {
 
 impl Manager {
     fn new() -> Self {
-        let file_path = full_file_path();
+        let mut file_path = std::env::current_exe().unwrap();
+        file_path.set_file_name(FILE);
 
         let mut file = if !fs::exists(&file_path).unwrap() {
             File::create_new(&file_path).unwrap()
@@ -77,16 +80,13 @@ impl Manager {
 
     fn new_entry(&mut self) {
         let mut buffer = String::new();
-        print!("Enter platform: ");
-        stdout().flush().unwrap();
-        stdin().read_line(&mut buffer).unwrap();
-        buffer.pop();
+        flushed_print!("Enter platform: ");
+        read_input_popped(&mut buffer);
 
         if self.entries.iter_mut().any(|s| s.platform == buffer) {
-            println!(
-                "Account information already stored for that platform. Delete it first to overwrite."
+            flushed_print!(
+                "Account information already stored for that platform. Delete it first to overwrite.\n"
             );
-            stdout().flush().unwrap();
             return;
         }
 
@@ -97,24 +97,18 @@ impl Manager {
 
         buffer.clear();
 
-        print!("Enter user name: ");
-        stdout().flush().unwrap();
-        stdin().read_line(&mut buffer).unwrap();
-        buffer.pop();
+        flushed_print!("Enter user name: ");
+        read_input_popped(&mut buffer);
         new_entry.user_name = encode(buffer.as_str());
         buffer.clear();
 
-        print!("Enter email: ");
-        stdout().flush().unwrap();
-        stdin().read_line(&mut buffer).unwrap();
-        buffer.pop();
+        flushed_print!("Enter email: ");
+        read_input_popped(&mut buffer);
         new_entry.email = encode(buffer.as_str());
         buffer.clear();
 
-        print!("Enter password: ");
-        stdout().flush().unwrap();
-        stdin().read_line(&mut buffer).unwrap();
-        buffer.pop();
+        flushed_print!("Enter password: ");
+        read_input_popped(&mut buffer);
         new_entry.password = encode(buffer.as_str());
         buffer.clear();
 
@@ -123,20 +117,16 @@ impl Manager {
 
     fn delete_entry(&mut self) {
         let mut buffer = String::new();
-        print!("Enter platform: ");
-        stdout().flush().unwrap();
-        stdin().read_line(&mut buffer).unwrap();
-        buffer.pop();
-        print!("\n");
-        stdout().flush().unwrap();
+        flushed_print!("Enter platform: ");
+        read_input_popped(&mut buffer);
+        flushed_print!("\n");
 
         let mut found_entry = false;
 
         self.entries.retain(|entry| {
             let keep = entry.platform != buffer;
             if !keep {
-                println!("Deleted account information:\n");
-                stdout().flush().unwrap();
+                flushed_print!("Deleted account information:\n\n");
                 print_entry(entry);
                 found_entry = true;
             }
@@ -144,21 +134,16 @@ impl Manager {
         });
 
         if !found_entry {
-            println!("No account information stored for that platform.");
-            stdout().flush().unwrap();
+            flushed_print!("No account information stored for that platform.\n");
         }
-        print!("\n");
-        stdout().flush().unwrap();
+        flushed_print!("\n");
     }
 
     fn get_entry(&mut self) {
         let mut buffer = String::new();
-        print!("Enter platform: ");
-        stdout().flush().unwrap();
-        stdin().read_line(&mut buffer).unwrap();
-        buffer.pop();
-        print!("\n");
-        stdout().flush().unwrap();
+        flushed_print!("Enter platform: ");
+        read_input_popped(&mut buffer);
+        flushed_print!("\n");
 
         for entry in self.entries.iter() {
             if entry.platform == buffer {
@@ -168,37 +153,26 @@ impl Manager {
                     .set_contents(decode(&entry.password))
                     .unwrap();
 
-                print!("\n");
-                stdout().flush().unwrap();
-                println!("Copied password to clipboard.");
-                stdout().flush().unwrap();
-                print!("\n");
-                stdout().flush().unwrap();
-
+                flushed_print!("\nCopied password to clipboard.\n\n");
                 return;
             }
         }
-        println!("No account information stored for that platform.");
-        stdout().flush().unwrap();
+
+        flushed_print!("No account information stored for that platform.\n");
     }
 
     fn view_all(&self) {
         if self.entries.is_empty() {
-            println!("No account information stored.");
-            stdout().flush().unwrap();
+            flushed_print!("No account information stored.\n");
             return;
         }
-        print!("\n");
-        stdout().flush().unwrap();
-        println!("---------------------------------------------------");
-        stdout().flush().unwrap();
+        flushed_print!("\n");
+        flushed_print!("---------------------------------------------------\n");
         for entry in self.entries.iter() {
             print_entry(entry);
-            println!("---------------------------------------------------");
-            stdout().flush().unwrap();
+            flushed_print!("---------------------------------------------------\n");
         }
-        print!("\n");
-        stdout().flush().unwrap();
+        flushed_print!("\n");
     }
 }
 
@@ -220,10 +194,8 @@ fn main() {
     let mut command = String::new();
 
     loop {
-        print!("Enter a command. [new, del, get, view, close]: ");
-        stdout().flush().unwrap();
-        stdin().read_line(&mut command).unwrap();
-        command.pop();
+        flushed_print!("Enter a command. [new, del, get, view, close]: ");
+        read_input_popped(&mut command);
 
         match command.as_str() {
             "new" => manager.new_entry(),
@@ -234,8 +206,7 @@ fn main() {
                 break;
             }
             _ => {
-                println!("Unknown command.");
-                stdout().flush().unwrap();
+                flushed_print!("Unknown command.\n");
             }
         }
 
