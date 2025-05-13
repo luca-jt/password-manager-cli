@@ -342,6 +342,7 @@ dependencies = [
  "ct-codecs",
  "fiat-crypto",
  "getrandom",
+ "serde",
  "subtle",
  "zeroize",
 ]
