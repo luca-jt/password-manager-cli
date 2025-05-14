@@ -138,7 +138,11 @@ impl Manager {
         flushed_print!("Enter platform: ");
         read_input_popped(&mut buffer);
 
-        if self.entries.iter_mut().any(|s| s.platform == buffer) {
+        if self
+            .entries
+            .iter_mut()
+            .any(|s| s.platform.as_str().to_lowercase() == buffer.as_str().to_lowercase())
+        {
             flushed_print!(
                 "Account information already stored for that platform. Delete it first to overwrite.\n"
             );
@@ -180,7 +184,7 @@ impl Manager {
         let mut found_entry = false;
 
         self.entries.retain(|entry| {
-            let keep = entry.platform != buffer;
+            let keep = entry.platform.as_str().to_lowercase() != buffer.as_str().to_lowercase();
             if !keep {
                 flushed_print!("Deleted account information:\n\n");
                 print_entry(entry, &self.secret_key);
@@ -202,7 +206,7 @@ impl Manager {
         flushed_print!("\n");
 
         for entry in self.entries.iter() {
-            if entry.platform == buffer {
+            if entry.platform.as_str().to_lowercase() == buffer.as_str().to_lowercase() {
                 print_entry(entry, &self.secret_key);
 
                 self.clipboard
