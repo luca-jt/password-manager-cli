@@ -21,6 +21,8 @@ macro_rules! flushed_print {
 fn read_input_popped(buffer: &mut String) {
     stdin().read_line(buffer).unwrap();
     buffer.pop();
+    #[cfg(target_os = "windows")]
+    buffer.pop();
 }
 
 fn encode(s: &str, secret_key: &SecretKey) -> Vec<u8> {
